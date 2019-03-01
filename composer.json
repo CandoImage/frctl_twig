@@ -1,0 +1,34 @@
+{
+    "name": "candoimage/frctl_twig",
+    "description": "Twig extension to integrate seamlessly with fractal twig adapter",
+    "keywords": ["twig", "fractal"],
+    "homepage": "https://github.com/CandoImage/frctl_twig",
+    "license": "MIT",
+    "authors": [
+      {
+        "name": "Peter Philipp",
+        "email": "peter.philipp@cando-image.com",
+        "homepage": "https://www.cando-image.com",
+        "role": "developer"
+      }
+    ],
+    "autoload": {
+        "psr-4": { "Frctl\\Twig\\Extension\\": "src/" }
+    },
+    "autoload-dev": {
+        "psr-4": { "Frctl\\Twig\\Extension\\Tests\\": "tests/" }
+    },
+    "require": {
+        "php": ">=7.0",
+        "twig/twig": "^1.14|^2.0"
+    },
+    "suggest": {
+        "symfony/framework-bundle": "The framework bundle to integrate the extension into Symfony",
+        "symfony/twig-bundle": "The twig bundle to integrate the extension into Symfony"
+    },
+    "extra": {
+        "branch-alias": {
+            "dev-master": "1.0.x-dev"
+        }
+    }
+}

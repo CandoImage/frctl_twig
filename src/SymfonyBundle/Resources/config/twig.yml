@@ -1,0 +1,4 @@
+services:
+  Frctl\Twig\Extension\FrctlTwigExtension:
+      tags:
+          - { name: twig.extension }
