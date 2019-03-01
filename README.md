@@ -9,7 +9,7 @@ Installation
 
 To install the latest stable version of this component, open a console and execute the following command:
 ```
-$ composer require CandoImage/frctl_twig
+$ composer require candoimage/frctl_twig
 ```
 
 Usage
