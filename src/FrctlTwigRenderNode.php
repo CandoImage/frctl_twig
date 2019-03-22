@@ -70,7 +70,7 @@ class FrctlTwigRenderNode extends \Twig_Node_Include
 
             // Extend provided variables with defaults.
             if ($this->hasNode('variables')) {
-                $newContextNode = $this->mergeContextValues($this->getNode('variables'), $newContextNode);
+                $newContextNode = $this->mergeContextValues($existingContextNode, $newContextNode);
             }
             $this->setNode('variables', $newContextNode);
         }
@@ -138,23 +138,26 @@ class FrctlTwigRenderNode extends \Twig_Node_Include
      * @return \Twig_Node
      */
     protected function mergeContextValues(\Twig_Node $existingContextNode, \Twig_Node $newContextNode) {
-        // Build a simple map of names for faster mapping.
-        $existingContextMap = [];
-        foreach ($existingContextNode->getIterator() as $k => $v) {
-            if (fmod($k, 2) == 0) {
-                $existingContextMap[$v->getAttribute('value')] = $k;
+        // Check if this is a typ we know how to properly merge.
+        if ($existingContextNode instanceof \Twig\Node\Expression\ArrayExpression) {
+            // Build a simple map of names for faster mapping.
+            $existingContextMap = [];
+            foreach ($existingContextNode->getIterator() as $k => $v) {
+                if (fmod($k, 2) == 0) {
+                    $existingContextMap[$v->getAttribute('value')] = $k;
+                }
             }
-        }
-        /** @var \Twig_Node $v **/
-        foreach ($newContextNode->getIterator() as $k => $v) {
-            // Only process every second one because the list consists of pairs.
-            if (fmod($k, 2) == 0) {
-                $name = $v->getAttribute('value');
-                if (!isset($existingContextMap[$name])) {
-                    // Append nodes.
-                    $nk = $existingContextNode->count();
-                    $existingContextNode->setNode($nk, $v);
-                    $existingContextNode->setNode(++$nk, $newContextNode->getNode(++$k));
+            /** @var \Twig_Node $v **/
+            foreach ($newContextNode->getIterator() as $k => $v) {
+                // Only process every second one because the list consists of pairs.
+                if (fmod($k, 2) == 0) {
+                    $name = $v->getAttribute('value');
+                    if (!isset($existingContextMap[$name])) {
+                        // Append nodes.
+                        $nk = $existingContextNode->count();
+                        $existingContextNode->setNode($nk, $v);
+                        $existingContextNode->setNode(++$nk, $newContextNode->getNode(++$k));
+                    }
                 }
             }
         }
