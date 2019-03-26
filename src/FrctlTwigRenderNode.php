@@ -70,7 +70,7 @@ class FrctlTwigRenderNode extends \Twig_Node_Include
 
             // Extend provided variables with defaults.
             if ($this->hasNode('variables')) {
-                $newContextNode = $this->mergeContextValues($existingContextNode, $newContextNode);
+                $newContextNode = $this->mergeContextValues($this->getNode('variables'), $newContextNode);
             }
             $this->setNode('variables', $newContextNode);
         }
