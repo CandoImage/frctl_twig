@@ -5,20 +5,57 @@ declare(strict_types=1);
 namespace Frctl\Twig\Extension;
 
 use Symfony\Component\Yaml\Yaml;
+use Twig\Node\Expression\ConstantExpression;
+use Twig\Node\Expression\FilterExpression;
+use Twig\Node\Node;
 
-class FrctlTwigRenderNode extends \Twig_Node_Include
+class FrctlTwigRenderNode extends \Twig\Node\IncludeNode
 {
     protected static $componentsPathMapping;
 
     const FRCTL_TWIG_BUNDLE = 'FrctlTwig';
 
-    // @TODO Implement a way to make this configurable.
-    protected $autoCompleteContext = true;
-
     public function compile(\Twig_Compiler $compiler)
     {
         $this->processFractalComponent($compiler);
         parent::compile($compiler);
+    }
+
+    protected function addTemplateArguments(\Twig_Compiler $compiler)
+    {
+        if (!$this->hasNode('variables')) {
+            if (true === $this->getAttribute('only')) {
+                $compiler->raw('[]');
+            }
+            elseif($this->hasAttribute('frctlContext')) {
+                $compiler
+                    ->raw('twig_array_merge(')
+                    ->subcompile($this->getAttribute('frctlContext'))
+                    ->raw(', $context')
+                    ->raw(')')
+                ;
+            }
+            else {
+                $compiler->raw('$context');
+            }
+        } elseif (false === $this->getAttribute('only')) {
+            $compiler
+                ->raw('twig_array_merge(');
+            if($this->hasAttribute('frctlContext')) {
+                $compiler
+                    ->subcompile($this->getAttribute('frctlContext'))
+                    ->raw(', ')
+                ;
+            }
+            $compiler->subcompile($this->getNode('variables'))
+                ->raw(', $context')
+                ->raw(')')
+            ;
+        } else {
+            $compiler->raw('twig_to_array(')
+                ->subcompile($this->getNode('variables'))
+                ->raw(')');
+        }
     }
 
     protected function getComponentsMapping(\Twig_Compiler $compiler) {
@@ -51,31 +88,31 @@ class FrctlTwigRenderNode extends \Twig_Node_Include
         }
         return self::$componentsPathMapping;
     }
-    
-    public function processFractalComponent(\Twig_Compiler $compiler) {
+
+    public function getComponent(\Twig_Compiler $compiler, $frctlTemplate) {
         // Try to find the matching template.
         $components = $this->getComponentsMapping($compiler);
 
-        $frctlTemplate = $this->getNode('expr')->getAttribute('value');
         list($component, $variant) = explode('--', $frctlTemplate);
         $component = trim($component, '@');
         if (!isset($components[$component])) {
             throw new \Twig_Error_Syntax(sprintf('No fractal component with the name %s found.', $frctlTemplate));
         }
+        $component_data = $components[$component];
+        $component_data['variant'] = $variant;
+        return $component_data;
+    }
+
+    public function processFractalComponent(\Twig_Compiler $compiler) {
+        $component = $this->getComponent($compiler, $this->getNode('expr')->getAttribute('value'));
         // If no context was given load the yaml.
-        if (!$this->hasNode('variables') || $this->autoCompleteContext) {
-
-            $context = $this->loadTemplateContext($components[$component]['config'], $variant);
+        if (false === $this->getAttribute('only')) {
+            $context = $this->loadTemplateContext($component['config'], $component['variant']);
             $newContextNode = $this->pseudoRenderContext($compiler, $context);
-
-            // Extend provided variables with defaults.
-            if ($this->hasNode('variables')) {
-                $newContextNode = $this->mergeContextValues($this->getNode('variables'), $newContextNode);
-            }
-            $this->setNode('variables', $newContextNode);
+            $this->setAttribute('frctlContext', new Node([$newContextNode], [], $this->getTemplateLine()));
         }
         // Now set the proper include path.
-        $this->getNode('expr')->setAttribute('value', $components[$component]['template']);
+        $this->getNode('expr')->setAttribute('value', $component['template']);
     }
 
     /**
@@ -89,9 +126,9 @@ class FrctlTwigRenderNode extends \Twig_Node_Include
     protected function loadTemplateContext($configFile, $variant = NULL) {
         $componentConfig = Yaml::parseFile($configFile);
         $context = array(
-            'variant' => NULL,
+            'variant' => $variant,
         );
-        if (isset($componentConfig['default'])) {
+        if (isset($componentConfig['default']) && !isset($context['variant'])) {
             $context['variant'] = $componentConfig['default'];
         }
         if (isset($componentConfig['context'])) {
@@ -126,40 +163,6 @@ class FrctlTwigRenderNode extends \Twig_Node_Include
         $source = new \Twig_Source('{% with ' . json_encode($context, JSON_UNESCAPED_UNICODE ) . ' %}{% endwith %}', $this->getNode('expr')->getTemplateName());
         $tokenStream = $compiler->getEnvironment()->tokenize($source);
         $parsedNode = $compiler->getEnvironment()->parse($tokenStream);
-        // Return only the portion with the context - no wrappers.
         return $parsedNode->getNode('body')->getNode(0)->getNode('variables');
     }
-
-    /**
-     * Merges two existing twig nodes.
-     *
-     * @param \Twig_Node $existingContextNode The node to extend.
-     * @param \Twig_Node $newContextNode The node to extend with.
-     * @return \Twig_Node
-     */
-    protected function mergeContextValues(\Twig_Node $existingContextNode, \Twig_Node $newContextNode) {
-        // Build a simple map of names for faster mapping.
-        $existingContextMap = [];
-        foreach ($existingContextNode->getIterator() as $k => $v) {
-            if (fmod($k, 2) == 0) {
-                $existingContextMap[$v->getAttribute('value')] = $k;
-            }
-        }
-        /** @var \Twig_Node $v **/
-        foreach ($newContextNode->getIterator() as $k => $v) {
-            // Only process every second one because the list consists of pairs.
-            if (fmod($k, 2) == 0) {
-                $name = $v->getAttribute('value');
-                if (!isset($existingContextMap[$name])) {
-                    // Append nodes.
-                    $nk = $existingContextNode->count();
-                    $existingContextNode->setNode($nk, $v);
-                    $existingContextNode->setNode(++$nk, $newContextNode->getNode(++$k));
-                }
-            }
-        }
-        return $existingContextNode;
-    }
-
-
 }
