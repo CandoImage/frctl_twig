@@ -25,7 +25,7 @@ class FrctlTwigRenderNode extends \Twig\Node\IncludeNode
     {
         if (!$this->hasNode('variables')) {
             if (true === $this->getAttribute('only')) {
-                $compiler->raw('[]');
+                $compiler->raw('["variant" => "' . $this->getAttribute('frctlVariant') . '"]');
             }
             elseif($this->hasAttribute('frctlContext')) {
                 $compiler
@@ -52,7 +52,7 @@ class FrctlTwigRenderNode extends \Twig\Node\IncludeNode
                 ->raw(')')
             ;
         } else {
-            $compiler->raw('twig_to_array(')
+            $compiler->raw('twig_array_merge(["variant" => "' . $this->getAttribute('frctlVariant') . '"],')
                 ->subcompile($this->getNode('variables'))
                 ->raw(')');
         }
@@ -105,6 +105,7 @@ class FrctlTwigRenderNode extends \Twig\Node\IncludeNode
 
     public function processFractalComponent(\Twig_Compiler $compiler) {
         $component = $this->getComponent($compiler, $this->getNode('expr')->getAttribute('value'));
+        $this->setAttribute('frctlVariant', $component['variant']);
         // If no context was given load the yaml.
         if (false === $this->getAttribute('only')) {
             $context = $this->loadTemplateContext($component['config'], $component['variant']);
