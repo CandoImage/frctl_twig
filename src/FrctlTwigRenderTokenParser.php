@@ -28,6 +28,41 @@ class FrctlTwigRenderTokenParser extends \Twig_TokenParser_Include
         return 'render';
     }
 
+    protected function parseArguments()
+    {
+
+        $stream = $this->parser->getStream();
+
+        $ignoreMissing = false;
+        if ($stream->nextIf(/* Token::NAME_TYPE */ 5, 'ignore')) {
+            $stream->expect(/* Token::NAME_TYPE */ 5, 'missing');
+
+            $ignoreMissing = true;
+        }
+
+        $variables = null;
+        if ($stream->nextIf(/* Token::NAME_TYPE */ 5, 'with')) {
+            $variables = $this->parser->getExpressionParser()->parseExpression();
+        }
+
+        $only = false;
+        if ($stream->nextIf(/* Token::NAME_TYPE */ 5, 'only')) {
+            $only = true;
+        }
+
+        $mergeFrctlContext = false;
+        if ($stream->nextIf(/*Token::NAME_TYPE*/ 5, 'merge')) {
+            $stream->expect(/*Token::NAME_TYPE*/ 5, 'frctl');
+            $stream->expect(/*Token::NAME_TYPE*/ 5, 'context');
+
+            $mergeFrctlContext = true;
+        }
+
+        $stream->expect(/* Token::BLOCK_END_TYPE */ 3);
+
+        return [$variables, $only, $ignoreMissing, $mergeFrctlContext];
+    }
+
     /**
      *
      * @Note This should be equal ot parent::parse but return a FrctlTwigRenderNode instance.
@@ -39,8 +74,8 @@ class FrctlTwigRenderTokenParser extends \Twig_TokenParser_Include
     {
         $expr = $this->parser->getExpressionParser()->parseExpression();
 
-        list($variables, $only, $ignoreMissing) = $this->parseArguments();
+        list($variables, $only, $ignoreMissing, $mergeFrctlContext) = $this->parseArguments();
 
-        return new FrctlTwigRenderNode($expr, $variables, $only, $ignoreMissing, $token->getLine(), $this->getTag());
+        return new FrctlTwigRenderNode($expr, $variables, $only, $ignoreMissing, $token->getLine(), $this->getTag(), $mergeFrctlContext);
     }
 }

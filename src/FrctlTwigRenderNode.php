@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Frctl\Twig\Extension;
 
 use Symfony\Component\Yaml\Yaml;
+use Twig\Node\Expression\AbstractExpression;
 use Twig\Node\Expression\ConstantExpression;
 use Twig\Node\Expression\FilterExpression;
 use Twig\Node\Node;
@@ -15,6 +16,13 @@ class FrctlTwigRenderNode extends \Twig\Node\IncludeNode
 
     const FRCTL_TWIG_BUNDLE = 'FrctlTwig';
 
+    public function __construct(AbstractExpression $expr, AbstractExpression $variables = null, bool $only = false, bool $ignoreMissing = false, int $lineno, string $tag = null, bool $mergeFrctlContext = false)
+    {
+        parent::__construct($expr, $variables, $only, $ignoreMissing, $lineno, $tag);
+        // Add new attribute.
+        $this->setAttribute('merge_frctl_context', $mergeFrctlContext);
+    }
+
     public function compile(\Twig_Compiler $compiler)
     {
         $this->processFractalComponent($compiler);
@@ -23,38 +31,82 @@ class FrctlTwigRenderNode extends \Twig\Node\IncludeNode
 
     protected function addTemplateArguments(\Twig_Compiler $compiler)
     {
-        if (!$this->hasNode('variables')) {
-            if (true === $this->getAttribute('only')) {
-                $compiler->raw('["variant" => "' . $this->getAttribute('frctlVariant') . '"]');
+        // Because twig_array_merge only supports two arguments contrary to array_merge the below code is quite complex
+        // to ensure we get a properly merged array.
+
+        // Count the items that will require merge.
+        $items = 1;
+        $merged = 0;
+        $mergeFrctlContext = ($this->getAttribute('merge_frctl_context') === true && $this->hasAttribute('frctlContext'));
+        $mergeContext = ($this->getAttribute('only') === false);
+        $mergeVariables = ($this->hasNode('variables'));
+
+        $items += (int) $mergeFrctlContext + (int) $mergeContext + (int) $mergeVariables;
+        $itemsLeft = $items;
+
+        if ($items > 1) {
+            $compiler->raw('twig_array_merge(' . PHP_EOL);
+        }
+        if ($items > 2) {
+            $compiler->indent();
+            $compiler->raw('twig_array_merge(' . PHP_EOL);
+        }
+
+        // Always register the used variant.
+        $compiler->raw('["variant" => "' . $this->getAttribute('frctlVariant') . '"]');
+        $merged++;
+        $itemsLeft--;
+
+        // If merge_frctl_context is enabled and frctlContext is available merge that too.
+        if ($mergeFrctlContext) {
+            if ($merged) {
+                $compiler->raw(', ' . PHP_EOL);
             }
-            elseif($this->hasAttribute('frctlContext')) {
-                $compiler
-                    ->raw('twig_array_merge(')
-                    ->subcompile($this->getAttribute('frctlContext'))
-                    ->raw(', $context')
-                    ->raw(')')
-                ;
+            $compiler->subcompile($this->getAttribute('frctlContext'));
+            $merged++;
+            $itemsLeft--;
+        }
+        if ($merged > 1 && $itemsLeft) {
+            $merged = 0;
+            $compiler->raw(PHP_EOL . '), ');
+            if ($itemsLeft >= 2) {
+                $compiler->raw('twig_array_merge(' . PHP_EOL);
             }
-            else {
-                $compiler->raw('$context');
+        }
+
+        // If context shall be passed add it in too.
+        if ($mergeContext) {
+            if ($merged) {
+                $compiler->raw(', ' . PHP_EOL);
             }
-        } elseif (false === $this->getAttribute('only')) {
-            $compiler
-                ->raw('twig_array_merge(');
-            if($this->hasAttribute('frctlContext')) {
-                $compiler
-                    ->subcompile($this->getAttribute('frctlContext'))
-                    ->raw(', ')
-                ;
+            $compiler->raw(' $context');
+            $merged++;
+            $itemsLeft--;
+        }
+        if ($merged > 1 && $itemsLeft) {
+            $merged = 0;
+            $compiler->raw(PHP_EOL . '), ');
+            if ($itemsLeft >= 2) {
+                $compiler->raw('twig_array_merge(' . PHP_EOL);
             }
-            $compiler->subcompile($this->getNode('variables'))
-                ->raw(', $context')
-                ->raw(')')
-            ;
-        } else {
-            $compiler->raw('twig_array_merge(["variant" => "' . $this->getAttribute('frctlVariant') . '"],')
-                ->subcompile($this->getNode('variables'))
-                ->raw(')');
+        }
+
+        // If variables were set manually - add them.
+        if ($mergeVariables) {
+            if ($merged) {
+                $compiler->raw(', ' . PHP_EOL);
+            }
+            $compiler->subcompile($this->getNode('variables'));
+            $merged++;
+            $itemsLeft--;
+        }
+
+        if ($merged > 1) {
+            $compiler->raw(PHP_EOL . ')');
+        }
+        if ($items > 2) {
+            $compiler->raw(PHP_EOL . ')');
+            $compiler->outdent();
         }
     }
 
@@ -107,7 +159,7 @@ class FrctlTwigRenderNode extends \Twig\Node\IncludeNode
         $component = $this->getComponent($compiler, $this->getNode('expr')->getAttribute('value'));
         $this->setAttribute('frctlVariant', $component['variant']);
         // If no context was given load the yaml.
-        if (false === $this->getAttribute('only')) {
+        if ($this->getAttribute('merge_frctl_context')) {
             $context = $this->loadTemplateContext($component['config'], $component['variant']);
             $newContextNode = $this->pseudoRenderContext($compiler, $context);
             $this->setAttribute('frctlContext', new Node([$newContextNode], [], $this->getTemplateLine()));

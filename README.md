@@ -59,6 +59,23 @@ Once registered, you can use the new `render` tag [seamlessly](https://github.co
 </html>
 ```
 
+Advanced examples:
+```twig
+{# @component will have access to the variables from the current context and the additional ones provided #}
+{% render'@component' with {'foo': 'bar'} %}
+
+{# only the foo variable will be accessible #}
+{% render'@component' with {'foo': 'bar'} only %}
+
+{# @component will have access to the variables from the current context and the additional ones provided and the ones provided in the fractal yml config #}
+{% render'@component' with {'foo': 'bar'} merge frctl context %}
+
+{# only the foo variable and the ones provided in the fractal yml config will be accessible #}
+{% render'@component' with {'foo': 'bar'} only merge frctl context %}
+```
+
+The variable `variant` contains the selected variant.
+
 License
 -------
 
